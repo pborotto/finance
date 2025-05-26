@@ -14,13 +14,13 @@ async def extract_pdf(
     conteudo = await file.read()
     transacoes = []
 
-    # Regex para múltiplas transações por linha: data + descrição + valor
+    # Regex para capturar múltiplas transações na mesma linha (data, descrição, valor)
     regex_transacao = r"(\\d{2} [A-Za-z]{3})\\s+(.+?)\\s+R\\$ (\\d{1,3}(?:\\.\\d{3})*,\\d{2})"
 
     with pdfplumber.open(BytesIO(conteudo)) as pdf:
         for i, pagina in enumerate(pdf.pages):
             if i < 2:
-                continue  # Ignora as duas primeiras páginas (resumo geral)
+                continue  # pula páginas de resumo
 
             texto = pagina.extract_text()
             if not texto:
@@ -29,7 +29,7 @@ async def extract_pdf(
             for linha in texto.split('\\n'):
                 linha = linha.strip()
 
-                # Captura todas as transações da linha
+                # Captura TODAS as transações presentes na linha
                 for match in re.finditer(regex_transacao, linha):
                     data = match.group(1)
                     descricao = match.group(2).strip()

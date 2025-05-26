@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form
 import pdfplumber
-import pandas as pd
+import re
 from io import BytesIO
 
 app = FastAPI()
@@ -14,8 +14,14 @@ async def extract_pdf(
     conteudo = await file.read()
     transacoes = []
 
+    # Regex que captura: data + descrição + valor (formato BR)
+    regex_transacao = r"^(\d{2} [A-Za-z]{3})\s+(.+?)\s+R\$ (\d{1,3}(?:\.\d{3})*,\d{2})$"
+
     with pdfplumber.open(BytesIO(conteudo)) as pdf:
-        for pagina in pdf.pages:
+        for i, pagina in enumerate(pdf.pages):
+            if i < 2:
+                continue  # pula as duas primeiras páginas (resumo geral)
+
             texto = pagina.extract_text()
             if not texto:
                 continue
@@ -23,9 +29,16 @@ async def extract_pdf(
             for linha in texto.split('\n'):
                 linha = linha.strip()
 
-                # Detecção simples de lançamentos
-                if linha.startswith("R$ "):
-                    transacoes.append({"linha": linha})
+                match = re.match(regex_transacao, linha)
+                if match:
+                    data = match.group(1)
+                    descricao = match.group(2).strip()
+                    valor = match.group(3)
+                    transacoes.append({
+                        "data": data,
+                        "descricao": descricao,
+                        "valor": valor
+                    })
 
     return {
         "transactions": transacoes,

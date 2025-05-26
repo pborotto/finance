@@ -1,12 +1,16 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form
 import pdfplumber
 import pandas as pd
 from io import BytesIO
 
 app = FastAPI()
 
-@app.post("/processar")
-async def processar_pdf(file: UploadFile = File(...)):
+@app.post("/extract-pdf")
+async def extract_pdf(
+    file: UploadFile = File(...),
+    month: str = Form(...),
+    year: str = Form(...)
+):
     conteudo = await file.read()
     transacoes = []
 
@@ -19,8 +23,13 @@ async def processar_pdf(file: UploadFile = File(...)):
             for linha in texto.split('\n'):
                 linha = linha.strip()
 
-                # Detecção simples de transações (pode melhorar depois com regex)
+                # Detecção simples de lançamentos
                 if linha.startswith("R$ "):
                     transacoes.append({"linha": linha})
 
-    return {"transacoes": transacoes}
+    return {
+        "transactions": transacoes,
+        "totalFound": len(transacoes),
+        "month": month,
+        "year": year
+    }

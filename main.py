@@ -14,30 +14,34 @@ async def extract_pdf(
     conteudo = await file.read()
     transacoes = []
 
-    # Regex para transações nacionais (com ou sem sinal negativo)
-    regex_transacao = r"(\d{2} [A-Za-z]{3})\s+(.+?)\s+(-?)R\$ (\d{1,3}(?:\.\d{3})*,\d{2})"
+    # Regex para transações nacionais (com sinal opcional separado ou junto do R$)
+    regex_transacao = r"(\d{2} [A-Za-z]{3})\s+(.+?)\s+(-?\s*)R\$ (\d{1,3}(?:\.\d{3})*,\d{2})"
 
-    # Regex para valor convertido em transações internacionais
-    regex_conversao = r"Convers[aã]o para Real\s*-\s*R\$ (\d{1,3}(?:\.\d{3})*,\d{2})"
+    # Regex para linha de conversão de valor em transações internacionais
+    regex_conversao = r"Convers[aã]o para Real\s*-\s*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})"
 
     with pdfplumber.open(BytesIO(conteudo)) as pdf:
         for i, pagina in enumerate(pdf.pages):
             if i < 2:
-                continue  # Ignora as duas primeiras páginas (resumo)
+                continue  # ignora as duas primeiras páginas (resumo)
 
-            texto = pagina.extract_text()
-            if not texto:
-                continue
+            try:
+                texto = pagina.extract_text()
+            except Exception:
+                continue  # ignora páginas com erro de extração
+
+            if not texto or "data:font" in texto or len(texto) < 30:
+                continue  # ignora páginas vazias ou com metadados inúteis
 
             linhas = texto.split('\n')
             for idx, linha in enumerate(linhas):
                 linha = linha.strip()
 
-                # 🔹 Transações nacionais (1 ou 2 por linha, com ou sem "-")
+                # 🔹 Transações nacionais (1 ou 2 por linha, positivo ou negativo)
                 for match in re.finditer(regex_transacao, linha):
                     data = match.group(1)
                     descricao = match.group(2).strip()
-                    sinal = match.group(3)
+                    sinal = match.group(3).strip()
                     valor = match.group(4)
 
                     if sinal == "-":
@@ -49,7 +53,7 @@ async def extract_pdf(
                         "valor": valor
                     })
 
-                # 🌍 Transações internacionais (ex: US$ + Conversão)
+                # 🌍 Transações internacionais (com US$ + Conversão para Real)
                 if "US$" in linha and idx + 2 < len(linhas):
                     linha_atual = linha
                     prox2 = linhas[idx + 2].strip()
@@ -75,3 +79,4 @@ async def extract_pdf(
         "month": month,
         "year": year
     }
+
